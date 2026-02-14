@@ -1,0 +1,2 @@
+ALTER TABLE order_refunds
+  ADD COLUMN IF NOT EXISTS completed_at TIMESTAMPTZ;

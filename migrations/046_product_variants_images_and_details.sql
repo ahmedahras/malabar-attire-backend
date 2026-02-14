@@ -1,0 +1,8 @@
+ALTER TABLE products
+  ADD COLUMN IF NOT EXISTS fabric TEXT,
+  ADD COLUMN IF NOT EXISTS fit TEXT,
+  ADD COLUMN IF NOT EXISTS occasion TEXT,
+  ADD COLUMN IF NOT EXISTS care_instructions TEXT;
+
+ALTER TABLE product_variants
+  ADD COLUMN IF NOT EXISTS image_url TEXT;

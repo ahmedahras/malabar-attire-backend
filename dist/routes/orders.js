@@ -1,0 +1,20 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.ordersRouter = void 0;
+const express_1 = require("express");
+const auth_1 = require("../middleware/auth");
+const authorization_1 = require("../middleware/authorization");
+const rateLimiter_1 = require("../middleware/rateLimiter");
+const ordersController_1 = require("../controllers/ordersController");
+exports.ordersRouter = (0, express_1.Router)();
+exports.ordersRouter.post("/", auth_1.requireAuth, rateLimiter_1.rateLimitOrdersRefunds, (0, auth_1.requireRole)("customer"), ordersController_1.createOrderFromCart);
+exports.ordersRouter.get("/", auth_1.requireAuth, rateLimiter_1.rateLimitProtected, (0, auth_1.requireRole)("customer"), ordersController_1.listOrdersForCustomer);
+exports.ordersRouter.get("/seller/orders", auth_1.requireAuth, rateLimiter_1.rateLimitProtected, (0, auth_1.requireRole)("shop_owner"), ordersController_1.listOrdersForSeller);
+exports.ordersRouter.get("/:id", auth_1.requireAuth, rateLimiter_1.rateLimitProtected, (0, authorization_1.requireOrderAccess)(), ordersController_1.getOrderById);
+exports.ordersRouter.get("/:id/timeline", auth_1.requireAuth, rateLimiter_1.rateLimitProtected, (0, authorization_1.requireOrderAccess)(), ordersController_1.getOrderTimeline);
+exports.ordersRouter.get("/:id/tracking", auth_1.requireAuth, rateLimiter_1.rateLimitProtected, (0, authorization_1.requireOrderAccess)(), ordersController_1.getOrderTracking);
+exports.ordersRouter.post("/:id/ship", auth_1.requireAuth, rateLimiter_1.rateLimitOrdersRefunds, (0, auth_1.requireRole)("shop_owner"), (0, authorization_1.requireOrderAccess)(), ordersController_1.shipOrder);
+exports.ordersRouter.post("/:id/shiprocket", auth_1.requireAuth, rateLimiter_1.rateLimitOrdersRefunds, (0, auth_1.requireRole)("shop_owner", "admin"), (0, authorization_1.requireOrderAccess)(), ordersController_1.shipOrderViaShiprocket);
+exports.ordersRouter.patch("/:id/status", auth_1.requireAuth, rateLimiter_1.rateLimitOrdersRefunds, (0, auth_1.requireRole)("shop_owner", "admin"), (0, authorization_1.requireOrderAccess)(), ordersController_1.updateOrderStatus);
+exports.ordersRouter.patch("/:id/paid", auth_1.requireAuth, rateLimiter_1.rateLimitOrdersRefunds, (0, auth_1.requireRole)("admin"), (0, authorization_1.requireOrderAccess)(), ordersController_1.confirmOrderPaid);
+//# sourceMappingURL=orders.js.map

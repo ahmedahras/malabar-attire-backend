@@ -1,0 +1,20 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.financeRouter = void 0;
+const express_1 = require("express");
+const auth_1 = require("../middleware/auth");
+const rateLimiter_1 = require("../middleware/rateLimiter");
+const financeController_1 = require("../controllers/financeController");
+exports.financeRouter = (0, express_1.Router)();
+exports.financeRouter.get("/summary", auth_1.requireAuth, rateLimiter_1.rateLimitProtected, (0, auth_1.requireRole)("admin"), financeController_1.financeSummary);
+exports.financeRouter.get("/system-state", auth_1.requireAuth, rateLimiter_1.rateLimitProtected, (0, auth_1.requireRole)("admin"), financeController_1.systemState);
+exports.financeRouter.get("/system-health", auth_1.requireAuth, rateLimiter_1.rateLimitProtected, (0, auth_1.requireRole)("admin"), financeController_1.financeSystemHealth);
+exports.financeRouter.get("/risk/sellers", auth_1.requireAuth, rateLimiter_1.rateLimitProtected, (0, auth_1.requireRole)("admin"), financeController_1.riskySellers);
+exports.financeRouter.get("/risk/seller/:id/status", auth_1.requireAuth, rateLimiter_1.rateLimitProtected, (0, auth_1.requireRole)("admin"), financeController_1.sellerRiskStatus);
+exports.financeRouter.get("/risk/score/:sellerId", auth_1.requireAuth, rateLimiter_1.rateLimitProtected, (0, auth_1.requireRole)("admin"), financeController_1.sellerRiskScore);
+exports.financeRouter.get("/isolation/status/:sellerId", auth_1.requireAuth, rateLimiter_1.rateLimitProtected, (0, auth_1.requireRole)("admin"), financeController_1.sellerIsolationStatus);
+exports.financeRouter.post("/risk/seller/:id/revalidate-now", auth_1.requireAuth, rateLimiter_1.rateLimitProtected, (0, auth_1.requireRole)("admin"), financeController_1.revalidateSellerRiskNow);
+exports.financeRouter.get("/audit/events", auth_1.requireAuth, rateLimiter_1.rateLimitProtected, (0, auth_1.requireRole)("admin"), financeController_1.auditEvents);
+exports.financeRouter.get("/sellers/:sellerId", auth_1.requireAuth, rateLimiter_1.rateLimitProtected, (0, auth_1.requireRole)("admin"), financeController_1.sellerFinanceBreakdown);
+exports.financeRouter.get("/sellers/:sellerId/payouts", auth_1.requireAuth, rateLimiter_1.rateLimitProtected, (0, auth_1.requireRole)("admin"), financeController_1.payoutHistory);
+//# sourceMappingURL=finance.js.map

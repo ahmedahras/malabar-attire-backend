@@ -1,0 +1,8 @@
+ALTER TABLE seller_balance
+  ADD COLUMN IF NOT EXISTS seller_operational_mode TEXT NOT NULL DEFAULT 'NORMAL'
+    CHECK (seller_operational_mode IN ('NORMAL', 'WATCH', 'STABILITY_LIMITED', 'QUALITY_ISSUE', 'FINANCIAL_RISK', 'ISOLATED')),
+  ADD COLUMN IF NOT EXISTS last_operational_mode_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS max_daily_orders_limit INTEGER;
+
+ALTER TABLE shops
+  ADD COLUMN IF NOT EXISTS visibility_multiplier NUMERIC(4, 2) NOT NULL DEFAULT 1.0;

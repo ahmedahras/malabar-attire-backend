@@ -1,0 +1,25 @@
+ALTER TABLE seller_risk_metrics
+  ADD COLUMN IF NOT EXISTS chargeback_rate_7d NUMERIC(6, 4) NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS chargeback_rate_30d NUMERIC(6, 4) NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS refund_ratio NUMERIC(6, 4) NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS rto_rate NUMERIC(6, 4) NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS order_growth_spike NUMERIC(6, 4) NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS failed_delivery_rate NUMERIC(6, 4) NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS unsettled_payout_exposure NUMERIC(12, 2) NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS seller_age_days INTEGER NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS delivery_success_rate NUMERIC(6, 4) NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS complaint_rate NUMERIC(6, 4) NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS payment_fraud_flags INTEGER NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS risk_trend TEXT NOT NULL DEFAULT 'stable'
+    CHECK (risk_trend IN ('improving', 'stable', 'worsening')),
+  ADD COLUMN IF NOT EXISTS last_score INTEGER NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS last_mode TEXT NOT NULL DEFAULT 'NORMAL'
+    CHECK (last_mode IN ('NORMAL', 'MONITORED', 'ISOLATED', 'BLOCKED')),
+  ADD COLUMN IF NOT EXISTS last_mode_change_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS cooldown_until TIMESTAMPTZ;
+
+ALTER TABLE seller_balance
+  DROP CONSTRAINT IF EXISTS seller_balance_seller_financial_mode_check;
+ALTER TABLE seller_balance
+  ADD CONSTRAINT seller_balance_seller_financial_mode_check
+  CHECK (seller_financial_mode IN ('NORMAL', 'MONITORED', 'ISOLATED', 'BLOCKED'));
