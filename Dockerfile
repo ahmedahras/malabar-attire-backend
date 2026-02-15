@@ -26,6 +26,7 @@ COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 
 COPY --from=build /app/dist ./dist
+COPY migrations ./migrations
 
 RUN useradd --create-home --uid 10001 appuser
 USER appuser

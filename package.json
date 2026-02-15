@@ -7,8 +7,8 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/server.js",
     "worker": "node dist/worker.js",
-    "migrate": "ts-node src/runMigrations.ts",
-    "create-admin": "ts-node src/scripts/createAdmin.ts"
+    "migrate": "node dist/runMigrations.js",
+    "create-admin": "node dist/scripts/createAdmin.js"
   },
   "keywords": [],
   "author": "",
