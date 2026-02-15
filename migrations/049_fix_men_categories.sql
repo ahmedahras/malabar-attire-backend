@@ -1,3 +1,7 @@
+-- Ensure gender column exists even if this file runs before 049_product_category_gender.sql
+ALTER TABLE product_categories
+  ADD COLUMN IF NOT EXISTS gender TEXT;
+
 -- Remove old unwanted categories
 DELETE FROM product_category_map
 WHERE category_id IN (

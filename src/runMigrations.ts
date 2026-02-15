@@ -3,20 +3,18 @@ import dotenv from "dotenv";
 import { Client } from "pg";
 import { readdir, readFile } from "fs/promises";
 import path from "path";
+import { databaseEnvHint, resolveDatabaseUrlFromEnv } from "./config/databaseUrl";
 
-dotenv.config({ override: true });
+dotenv.config({ override: false });
 
 // Backup strategy (ops):
 // - Run automated full backups daily.
 // - Perform a monthly restore test to validate recovery.
 
 const runMigrations = async () => {
-  const rawUrl = process.env.DATABASE_URL ?? "";
-  const databaseUrl = rawUrl.trim().replace(/^['"]|['"]$/g, "");
+  const databaseUrl = resolveDatabaseUrlFromEnv();
   if (!databaseUrl) {
-    throw new Error(
-      "DATABASE_URL is not set. Expected format: postgresql://user:password@host:5432/dbname"
-    );
+    throw new Error(`DATABASE_URL is not set. ${databaseEnvHint}`);
   }
   if (/\s/.test(databaseUrl)) {
     throw new Error(

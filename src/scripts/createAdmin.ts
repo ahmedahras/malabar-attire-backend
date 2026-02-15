@@ -1,17 +1,18 @@
 import bcrypt from "bcryptjs";
 import dotenv from "dotenv";
 import { Pool } from "pg";
+import { databaseEnvHint, resolveDatabaseUrlFromEnv } from "../config/databaseUrl";
 
-dotenv.config();
+dotenv.config({ override: false });
 
 const ADMIN_EMAIL = "director@codingai.in";
 const ADMIN_PASSWORD = "AhrasAe@10";
 const ADMIN_NAME = "Director";
 
 async function main() {
-  const databaseUrl = process.env.DATABASE_URL;
+  const databaseUrl = resolveDatabaseUrlFromEnv();
   if (!databaseUrl) {
-    throw new Error("DATABASE_URL is not set in .env");
+    throw new Error(`DATABASE_URL is not set. ${databaseEnvHint}`);
   }
 
   const db = new Pool({ connectionString: databaseUrl });

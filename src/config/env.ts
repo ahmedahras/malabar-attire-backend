@@ -1,16 +1,22 @@
 import dotenv from "dotenv";
 import path from "path";
 import { z } from "zod";
+import { databaseEnvHint, resolveDatabaseUrlFromEnv } from "./databaseUrl";
 
 dotenv.config({
   path: path.resolve(__dirname, "..", "..", ".env"),
-  override: true
+  override: false
 });
+
+const resolvedDatabaseUrl = resolveDatabaseUrlFromEnv();
+if (resolvedDatabaseUrl) {
+  process.env.DATABASE_URL = resolvedDatabaseUrl;
+}
 
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   PORT: z.coerce.number().default(4000),
-  DATABASE_URL: z.string(),
+  DATABASE_URL: z.string().min(1, `DATABASE_URL is required. ${databaseEnvHint}`),
   REDIS_URL: z.string().default("redis://localhost:6379"),
   JWT_SECRET: z.string(),
   JWT_EXPIRES_IN: z.string().default("7d"),
