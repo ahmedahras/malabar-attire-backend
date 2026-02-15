@@ -36,13 +36,46 @@ const runMigrations = async () => {
   await client.connect();
 
   try {
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS schema_migrations (
+        filename TEXT PRIMARY KEY,
+        applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+
+    const appliedResult = await client.query<{ filename: string }>(
+      "SELECT filename FROM schema_migrations"
+    );
+    const applied = new Set(appliedResult.rows.map((row) => row.filename));
+
     for (const file of files) {
+      if (applied.has(file)) {
+        continue;
+      }
+
       const fullPath = path.join(migrationsDir, file);
       const sql = await readFile(fullPath, "utf8");
       if (!sql.trim()) {
+        await client.query(
+          "INSERT INTO schema_migrations (filename) VALUES ($1) ON CONFLICT (filename) DO NOTHING",
+          [file]
+        );
         continue;
       }
-      await client.query(sql);
+
+      await client.query("BEGIN");
+      try {
+        await client.query(sql);
+        await client.query(
+          "INSERT INTO schema_migrations (filename) VALUES ($1) ON CONFLICT (filename) DO NOTHING",
+          [file]
+        );
+        await client.query("COMMIT");
+      } catch (error) {
+        await client.query("ROLLBACK");
+        throw error;
+      }
+
       // eslint-disable-next-line no-console
       console.log(`Applied migration: ${file}`);
     }

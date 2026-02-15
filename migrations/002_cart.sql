@@ -43,9 +43,31 @@ CREATE INDEX IF NOT EXISTS idx_carts_updated ON carts(updated_at DESC);
 
 CREATE INDEX IF NOT EXISTS idx_cart_items_cart ON cart_items(cart_id);
 CREATE INDEX IF NOT EXISTS idx_cart_items_product ON cart_items(product_id);
-CREATE INDEX IF NOT EXISTS idx_cart_items_variant ON cart_items(product_variant_id);
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'cart_items'
+      AND column_name = 'product_variant_id'
+  ) THEN
+    CREATE INDEX IF NOT EXISTS idx_cart_items_variant ON cart_items(product_variant_id);
+  END IF;
+END $$;
 
-CREATE INDEX IF NOT EXISTS idx_cart_reservations_variant ON cart_item_reservations(product_variant_id);
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'cart_item_reservations'
+      AND column_name = 'product_variant_id'
+  ) THEN
+    CREATE INDEX IF NOT EXISTS idx_cart_reservations_variant ON cart_item_reservations(product_variant_id);
+  END IF;
+END $$;
 CREATE INDEX IF NOT EXISTS idx_cart_reservations_status ON cart_item_reservations(status);
 CREATE INDEX IF NOT EXISTS idx_cart_reservations_expires ON cart_item_reservations(expires_at);
 

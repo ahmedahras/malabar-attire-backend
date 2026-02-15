@@ -139,7 +139,18 @@ CREATE INDEX IF NOT EXISTS idx_orders_user ON orders(user_id);
 CREATE INDEX IF NOT EXISTS idx_orders_shop ON orders(shop_id);
 CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status, placed_at DESC);
 CREATE INDEX IF NOT EXISTS idx_order_items_order ON order_items(order_id);
-CREATE INDEX IF NOT EXISTS idx_order_items_variant ON order_items(product_variant_id);
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'order_items'
+      AND column_name = 'product_variant_id'
+  ) THEN
+    CREATE INDEX IF NOT EXISTS idx_order_items_variant ON order_items(product_variant_id);
+  END IF;
+END $$;
 
 -- Materialized stock summary (refresh with job/cron)
 CREATE MATERIALIZED VIEW IF NOT EXISTS product_stock_summary AS
