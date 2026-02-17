@@ -35,7 +35,10 @@ const webhookPayloadSchema = z
 
 const extractAuthSecret = (req: Request) => {
   const direct =
-    req.headers["x-shiprocket-secret"] ?? req.headers["x-webhook-secret"] ?? req.headers["x-api-secret"];
+    req.headers["x-api-key"] ??
+    req.headers["x-shiprocket-secret"] ??
+    req.headers["x-webhook-secret"] ??
+    req.headers["x-api-secret"];
   if (typeof direct === "string" && direct.trim()) {
     return direct.trim();
   }
@@ -105,14 +108,6 @@ export const handleShiprocketWebhookSync = async (req: Request, res: Response) =
 };
 
 export const handleShipmentWebhook = async (req: Request, res: Response) => {
-  const configuredSecret = env.SHIPROCKET_WEBHOOK_SECRET?.trim();
-  const providedToken = req.headers["x-api-key"];
-  const token = typeof providedToken === "string" ? providedToken.trim() : "";
-
-  if (!configuredSecret || !token || token !== configuredSecret) {
-    return res.status(401).json({ error: "Unauthorized" });
-  }
-
   logger.info({ provider: "shiprocket", payload: req.body ?? null }, "Shipment webhook received");
   return res.status(200).json({ status: "ok" });
 };
