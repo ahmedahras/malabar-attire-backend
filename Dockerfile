@@ -1,29 +1,26 @@
 # ---------- BASE ----------
-FROM node:20-slim AS base
+FROM node:20-bookworm-slim AS base
 WORKDIR /app
 
-
-# ---------- DEPENDENCIES ----------
+# ---------- DEPENDENCIES (with dev deps for build) ----------
 FROM base AS deps
 COPY package.json package-lock.json ./
 RUN npm ci
 
-
 # ---------- BUILD ----------
 FROM base AS build
-COPY package.json package-lock.json ./
+COPY package.json package-lock.json tsconfig.json ./
 COPY --from=deps /app/node_modules ./node_modules
-COPY tsconfig.json ./
 COPY src ./src
 RUN npm run build
 
-
-# ---------- RUNTIME ----------
-FROM base AS runtime
+# ---------- PRODUCTION RUNTIME ----------
+FROM node:20-bookworm-slim AS runtime
+WORKDIR /app
 ENV NODE_ENV=production
 
 COPY package.json package-lock.json ./
-RUN npm ci --omit=dev
+RUN npm ci --omit=dev && npm cache clean --force
 
 COPY --from=build /app/dist ./dist
 COPY migrations ./migrations
@@ -33,4 +30,4 @@ USER appuser
 
 EXPOSE 4000
 
-CMD ["sh", "-c", "npm run migrate && npm run start"]
+CMD ["sh", "-c", "node dist/runMigrations.js && node dist/server.js"]

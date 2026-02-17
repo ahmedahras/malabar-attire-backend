@@ -1,11 +1,4 @@
-import { createClient } from "redis";
-import { env } from "../config/env";
-import { logger } from "../utils/logger";
+import { redis as cacheClient } from "../lib/redis";
 
-export const cacheClient = createClient({
-  url: env.REDIS_URL
-});
+export { cacheClient };
 
-cacheClient.on("error", (err) => {
-  logger.error({ err }, "Redis error");
-});

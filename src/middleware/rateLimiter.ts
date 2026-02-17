@@ -1,31 +1,20 @@
 import { NextFunction, Request, Response } from "express";
-import IORedis from "ioredis";
-import { env } from "../config/env";
-import { logger } from "../utils/logger";
+import { getRedisClient } from "../lib/redis";
 
-let rateClient: IORedis | null = null;
-
-const getClient = () => {
+const ensureClientReady = async () => {
+  const rateClient = getRedisClient();
   if (!rateClient) {
-    rateClient = new IORedis(env.REDIS_URL, {
-      lazyConnect: true,
-      maxRetriesPerRequest: 1,
-      connectTimeout: 3_000,
-      enableOfflineQueue: false,
-      retryStrategy: (times) => Math.min(1000 * 2 ** (times - 1), 10_000)
-    });
-    rateClient.on("ready", () => {
-      logger.info("[REDIS] Connected");
-    });
-    rateClient.on("reconnecting", () => {
-      logger.warn("[REDIS] Reconnecting...");
-    });
-    rateClient.on("error", (error) => {
-      logger.warn({ err: error }, "[REDIS] Client error");
-    });
-    rateClient.on("end", () => {
-      logger.warn("[REDIS] Offline — running in degraded mode");
-    });
+    return null;
+  }
+  if (rateClient.status !== "ready") {
+    try {
+      await rateClient.connect();
+    } catch {
+      return null;
+    }
+  }
+  if (rateClient.status !== "ready") {
+    return null;
   }
   return rateClient;
 };
@@ -42,7 +31,10 @@ const createLimiter = (limit: number, keyFn: (req: Request) => string) => {
   return async (req: Request, res: Response, next: NextFunction) => {
     const key = keyFn(req);
     try {
-      const client = getClient();
+      const client = await ensureClientReady();
+      if (!client) {
+        return next();
+      }
       const count = await client.incr(key);
       if (count === 1) {
         await client.expire(key, 60);

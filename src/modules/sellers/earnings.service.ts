@@ -40,7 +40,8 @@ export const getEarningsSummary = async (sellerId: string): Promise<EarningsSumm
          SELECT oi.order_id,
                 COALESCE(SUM(oi.total_price), 0)::numeric AS item_total
          FROM order_items oi
-         INNER JOIN products p ON p.id = oi.product_id
+         INNER JOIN product_variant_colors pvc ON pvc.id = oi.variant_color_id
+         INNER JOIN products p ON p.id = pvc.product_id
          INNER JOIN shops s ON s.id = p.shop_id
          INNER JOIN orders o ON o.id = oi.order_id
          WHERE s.owner_user_id = $1

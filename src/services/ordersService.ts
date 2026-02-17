@@ -587,7 +587,7 @@ export const getAdminOrderDetail = async (orderId: string): Promise<AdminOrderDe
   const itemsResult = await db.query(
     `SELECT
        oi.id,
-       oi.product_id,
+       pvc.product_id,
        oi.variant_color_id,
        oi.product_name,
        oi.size,
@@ -596,6 +596,7 @@ export const getAdminOrderDetail = async (orderId: string): Promise<AdminOrderDe
        oi.unit_price,
        oi.total_price
      FROM order_items oi
+     INNER JOIN product_variant_colors pvc ON pvc.id = oi.variant_color_id
      WHERE oi.order_id = $1
      ORDER BY oi.created_at ASC`,
     [orderId]

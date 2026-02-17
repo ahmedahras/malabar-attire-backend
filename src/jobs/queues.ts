@@ -1,8 +1,7 @@
 import { Queue } from "bullmq";
-import IORedis from "ioredis";
-import { env } from "../config/env";
+import { createRedisClient, type RedisClient } from "../lib/redis";
 
-let redisConnection: IORedis | null = null;
+let redisConnection: RedisClient | null = null;
 let automationQueue: Queue | null = null;
 let refundsQueue: Queue | null = null;
 let notificationsQueue: Queue | null = null;
@@ -12,9 +11,11 @@ let eventsQueue: Queue | null = null;
 
 export const getRedisConnection = () => {
   if (!redisConnection) {
-    redisConnection = new IORedis(env.REDIS_URL, {
-      maxRetriesPerRequest: null
-    });
+    const connection = createRedisClient({ maxRetriesPerRequest: null });
+    if (!connection) {
+      throw new Error("Redis is disabled");
+    }
+    redisConnection = connection;
   }
   return redisConnection;
 };
@@ -83,4 +84,3 @@ export const getEventsQueue = () => {
   }
   return eventsQueue;
 };
-

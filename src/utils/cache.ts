@@ -1,18 +1,19 @@
-import IORedis from "ioredis";
-import { env } from "../config/env";
+import { getRedisClient } from "../lib/redis";
 
-let cacheClient: IORedis | null = null;
 let hits = 0;
 let misses = 0;
 let lastDegradedLogAt = 0;
 
 // L1: In-memory cache (per Node process)
 const MAX_MEMORY_CACHE_SIZE = 500;
-const memoryCache = new Map<string, {
-  value: any;
-  expiresAt: number;
-  staleAt: number;
-}>();
+const memoryCache = new Map<
+  string,
+  {
+    value: any;
+    expiresAt: number;
+    staleAt: number;
+  }
+>();
 
 const isConnectionError = (error: unknown): boolean => {
   if (!error || typeof error !== "object") {
@@ -42,40 +43,15 @@ const logDegradedOncePerMinute = (error: unknown): void => {
     return;
   }
   lastDegradedLogAt = now;
-  console.warn("[REDIS] Offline — running in degraded mode");
-};
-
-const getClient = (): IORedis => {
-  if (!cacheClient) {
-    console.log("[REDIS] Client initializing");
-    cacheClient = new IORedis(env.REDIS_URL, {
-      lazyConnect: true,
-      maxRetriesPerRequest: 1,
-      connectTimeout: 3_000,
-      enableOfflineQueue: false,
-      retryStrategy: (times) => Math.min(1000 * 2 ** (times - 1), 10_000)
-    });
-    cacheClient.on("ready", () => {
-      lastDegradedLogAt = 0;
-      console.warn("[REDIS] Connected");
-      console.log("[REDIS] Connected");
-    });
-    cacheClient.on("reconnecting", () => {
-      console.warn("[REDIS] Reconnecting...");
-    });
-    cacheClient.on("error", (error) => {
-      console.log("[REDIS] Connection error");
-      logDegradedOncePerMinute(error);
-    });
-    cacheClient.on("end", () => {
-      logDegradedOncePerMinute({ code: "ECONNREFUSED" });
-    });
-  }
-  return cacheClient;
+  console.warn("[REDIS] Offline - running in degraded mode");
 };
 
 const ensureClientReady = async () => {
-  const client = getClient();
+  const client = getRedisClient();
+  if (!client) {
+    return null;
+  }
+
   if (client.status !== "ready") {
     try {
       await client.connect();
@@ -92,7 +68,6 @@ const ensureClientReady = async () => {
 };
 
 export const getCache = async <T>(key: string): Promise<T | null> => {
-  console.log("[REDIS] getCache called");
   try {
     const client = await ensureClientReady();
     if (!client) {
@@ -114,7 +89,6 @@ export const getCache = async <T>(key: string): Promise<T | null> => {
 };
 
 export const setCache = async (key: string, data: unknown, ttlSeconds: number) => {
-  console.log("[REDIS] setCache called");
   try {
     const client = await ensureClientReady();
     if (!client) {
@@ -133,8 +107,8 @@ export const getWithRefresh = async <T>(
   fetcher: () => Promise<T>
 ): Promise<T> => {
   const now = Date.now();
-  
-  // 1️⃣ Check memory cache (L1)
+
+  // 1) Check memory cache (L1)
   // LRU touch on read: re-insert to mark as recently used
   let memoryEntry = memoryCache.get(key);
   if (memoryEntry !== undefined) {
@@ -144,7 +118,7 @@ export const getWithRefresh = async <T>(
   if (memoryEntry && memoryEntry.expiresAt > now) {
     // Memory hit and not expired
     hits += 1;
-    
+
     // Trigger background refresh if stale but not expired
     if (memoryEntry.staleAt <= now) {
       // Background refresh (non-blocking)
@@ -174,11 +148,11 @@ export const getWithRefresh = async <T>(
           // Ignore fetcher errors in background refresh
         });
     }
-    
+
     // Return cached value immediately
     return memoryEntry.value as T;
   }
-  
+
   // Memory miss or expired - check Redis (L2)
   const redisCached = await getCache<T>(key);
   if (redisCached !== null) {
@@ -199,16 +173,16 @@ export const getWithRefresh = async <T>(
     }
     return redisCached;
   }
-  
+
   // Redis miss - call DB fetcher (L3)
   misses += 1;
   const fresh = await fetcher();
-  
+
   // Store in Redis (best-effort, non-blocking)
   setCache(key, fresh, ttlSeconds).catch(() => {
     // Ignore Redis errors - continue with memory cache
   });
-  
+
   // Store in memory
   const expiresAt = now + ttlSeconds * 1000;
   const staleAt = now + ttlSeconds * 1000 * 0.8;
@@ -224,12 +198,11 @@ export const getWithRefresh = async <T>(
       memoryCache.delete(oldestKey);
     }
   }
-  
+
   return fresh;
 };
 
 export const deleteCache = async (key: string) => {
-  console.log("[REDIS] deleteCache called");
   // Clear memory cache (L1)
   memoryCache.delete(key);
   // Clear Redis cache (L2)
@@ -254,19 +227,15 @@ export const cacheStats = () => {
 };
 
 export const invalidatePattern = async (pattern: string) => {
-  console.log("[REDIS] invalidatePattern called");
-  
   // Clear memory cache (L1) - convert Redis pattern to regex
-  const regexPattern = pattern
-    .replace(/\*/g, ".*")
-    .replace(/\?/g, ".");
+  const regexPattern = pattern.replace(/\*/g, ".*").replace(/\?/g, ".");
   const regex = new RegExp(`^${regexPattern}$`);
   for (const key of memoryCache.keys()) {
     if (regex.test(key)) {
       memoryCache.delete(key);
     }
   }
-  
+
   // Clear Redis cache (L2)
   try {
     const client = await ensureClientReady();

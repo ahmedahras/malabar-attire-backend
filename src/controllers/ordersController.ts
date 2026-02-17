@@ -85,10 +85,21 @@ export const createOrderFromCart = async (req: Request, res: Response) => {
       return res.status(409).json({ error: "Product unavailable" });
     }
 
-    const quantityByProduct = new Map<string, number>();
+    const neededByVariant = new Map<string, { variantColorId: string; size: string; needed: number }>();
     for (const item of itemsResult.rows) {
-      const current = quantityByProduct.get(item.product_id) ?? 0;
-      quantityByProduct.set(item.product_id, current + Number(item.quantity));
+      const variantColorId = String(item.variant_color_id);
+      const size = String(item.size);
+      const key = `${variantColorId}:${size}`;
+      const current = neededByVariant.get(key);
+      if (current) {
+        current.needed += Number(item.quantity);
+      } else {
+        neededByVariant.set(key, {
+          variantColorId,
+          size,
+          needed: Number(item.quantity)
+        });
+      }
     }
 
     const shopIds = new Set(itemsResult.rows.map((row) => row.shop_id));
@@ -140,30 +151,19 @@ export const createOrderFromCart = async (req: Request, res: Response) => {
       }
     }
 
-    const productIds = Array.from(quantityByProduct.keys());
-    if (productIds.length > 0) {
-      const { rows: reservedRows } = await client.query(
-        `SELECT product_id, COALESCE(SUM(quantity), 0)::int AS reserved
-         FROM product_reservations
-         WHERE user_id = $1
-           AND status = 'ACTIVE'
-           AND expires_at > NOW()
-           AND product_id = ANY($2)
-         GROUP BY product_id`,
-        [req.user.sub, productIds]
+    for (const { variantColorId, size, needed } of neededByVariant.values()) {
+      const stockResult = await client.query(
+        `SELECT stock
+         FROM product_variant_sizes
+         WHERE variant_color_id = $1
+           AND size = $2
+         FOR UPDATE`,
+        [variantColorId, size]
       );
-
-      const reservedByProduct = new Map<string, number>();
-      for (const row of reservedRows) {
-        reservedByProduct.set(row.product_id, Number(row.reserved));
-      }
-
-      for (const [productId, needed] of quantityByProduct.entries()) {
-        const reserved = reservedByProduct.get(productId) ?? 0;
-        if (reserved < needed) {
-          await client.query("ROLLBACK");
-          return res.status(409).json({ error: "Out of stock" });
-        }
+      const available = Number(stockResult.rows[0]?.stock ?? 0);
+      if (available < needed) {
+        await client.query("ROLLBACK");
+        return res.status(409).json({ error: "Out of stock" });
       }
     }
 
@@ -190,13 +190,12 @@ export const createOrderFromCart = async (req: Request, res: Response) => {
     for (const item of itemsResult.rows) {
       await client.query(
         `INSERT INTO order_items
-         (order_id, variant_color_id, product_id, product_name, size, color,
+         (order_id, variant_color_id, product_name, size, color,
           unit_price, quantity, total_price)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
         [
           orderId,
           item.variant_color_id,
-          item.product_id,
           item.product_name,
           item.size,
           item.color,
@@ -221,6 +220,15 @@ export const createOrderFromCart = async (req: Request, res: Response) => {
     });
 
     await emitOrderEvent(client, orderId, "order.created", "customer", req.user.sub);
+
+    await client.query(
+      `UPDATE carts
+       SET status = 'abandoned', updated_at = NOW()
+       WHERE user_id = $1
+         AND status = 'converted'
+         AND id <> $2`,
+      [req.user.sub, body.cartId]
+    );
 
     await client.query(
       `UPDATE carts SET status = 'converted', updated_at = NOW() WHERE id = $1`,

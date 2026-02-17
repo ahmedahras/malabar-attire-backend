@@ -8,35 +8,17 @@ import { logger } from "./utils/logger";
 
 export const createApp = () => {
   const app = express();
+  const frontendOrigin = process.env.FRONTEND_URL || "http://localhost:3000";
+  const corsOptions = {
+    origin: frontendOrigin,
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"]
+  };
 
   app.use(helmet());
-
-  app.use(
-    cors({
-      origin: (origin, callback) => {
-        const isDev = process.env.NODE_ENV !== "production";
-        if (isDev) {
-          callback(null, true);
-          return;
-        }
-
-        const allowed = [
-          process.env.FRONTEND_URL,
-          "http://localhost:3000",
-          "http://localhost:3001",
-          "http://127.0.0.1:3000",
-          "http://127.0.0.1:3001"
-        ];
-
-        if (!origin || allowed.includes(origin)) {
-          callback(null, true);
-        } else {
-          callback(new Error("Not allowed by CORS"));
-        }
-      },
-      credentials: false
-    })
-  );
+  app.use(cors(corsOptions));
+  app.options(/^\/api\/.*$/, cors(corsOptions));
 
   app.use(
     express.json({

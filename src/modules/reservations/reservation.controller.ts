@@ -1,7 +1,8 @@
 import { Request, Response } from "express";
+import type { PoolClient } from "pg";
 import { z } from "zod";
 import { db } from "../../db/pool";
-import { reserveProduct, convertReservation } from "./reservation.service";
+import { convertReservation } from "./reservation.service";
 
 const reserveSchema = z.object({
   productId: z.string().uuid(),
@@ -19,66 +20,55 @@ export const reserveCartItem = async (req: Request, res: Response) => {
     return res.status(401).json({ error: "Missing token" });
   }
 
-  const body = reserveSchema.parse(req.body);
-
-  const productResult = await db.query(
-    `SELECT p.id,
-            p.name,
-            p.price,
-            p.district,
-            p.images,
-            p.status,
-            p.is_approved,
-            vc.id AS variant_color_id,
-            vc.color_name,
-            vc.color_image_url,
-            vs.size,
-            vs.stock
-     FROM products p
-     INNER JOIN product_variant_colors vc ON vc.id = $2 AND vc.product_id = p.id
-     INNER JOIN product_variant_sizes vs ON vs.variant_color_id = vc.id AND vs.size = $3
-     WHERE p.id = $1`,
-    [body.productId, body.variantColorId, body.size]
-  );
-
-  const product = productResult.rows[0];
-  if (!product) {
-    return res.status(404).json({ error: "Product not found" });
+  const parsed = reserveSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Invalid request payload" });
   }
-  if (product.status !== "LIVE" || !product.is_approved) {
-    return res.status(409).json({ error: "Product unavailable" });
-  }
+  const body = parsed.data;
 
-  let reservation;
+  let client: PoolClient | undefined;
   try {
-    reservation = await reserveProduct(body.productId, req.user.sub, body.quantity);
-  } catch (error) {
-    if (error instanceof Error && error.message === "Out of stock") {
-      return res.status(409).json({ error: "Out of stock" });
-    }
-    if (error instanceof Error && error.message === "Product not found") {
-      return res.status(404).json({ error: "Product not found" });
-    }
-    throw error;
-  }
+    const productResult = await db.query(
+      `SELECT p.id,
+              p.name,
+              p.price,
+              p.district,
+              p.images,
+              p.status,
+              p.is_approved,
+              vc.id AS variant_color_id,
+              vc.color_name,
+              vc.color_image_url,
+              vs.size,
+              vs.stock
+       FROM products p
+       INNER JOIN product_variant_colors vc ON vc.id = $2::uuid AND vc.product_id = p.id
+       INNER JOIN product_variant_sizes vs ON vs.variant_color_id = vc.id AND vs.size = $3::text
+       WHERE p.id = $1::uuid`,
+      [body.productId, body.variantColorId, body.size]
+    );
 
-  const client = await db.connect();
-  try {
+    const product = productResult.rows[0];
+
+    if (!product) {
+      return res.status(400).json({ error: "Invalid product/variant/size" });
+    }
+    if (product.status !== "LIVE" || !product.is_approved) {
+      return res.status(400).json({ error: "Product unavailable" });
+    }
+
+    client = await db.connect();
     await client.query("BEGIN");
+
     const { rows: cartRows } = await client.query(
-      `SELECT id FROM carts WHERE user_id = $1 AND status = 'active'`,
+      `INSERT INTO carts (user_id, status)
+       VALUES ($1::uuid, 'active')
+       ON CONFLICT (user_id, status)
+       DO UPDATE SET updated_at = NOW()
+       RETURNING id`,
       [req.user.sub]
     );
-    let cartId = cartRows[0]?.id as string | undefined;
-    if (!cartId) {
-      const { rows } = await client.query(
-        `INSERT INTO carts (user_id, status)
-         VALUES ($1, 'active')
-         RETURNING id`,
-        [req.user.sub]
-      );
-      cartId = rows[0].id as string;
-    }
+    const cartId = cartRows[0].id as string;
 
     const unitPrice = Number(product.price);
     const productSnapshot = {
@@ -99,7 +89,7 @@ export const reserveCartItem = async (req: Request, res: Response) => {
     const { rows: existing } = await client.query(
       `SELECT id, quantity
        FROM cart_items
-       WHERE cart_id = $1 AND variant_color_id = $2 AND size = $3
+       WHERE cart_id = $1::uuid AND variant_color_id = $2::uuid AND size = $3::text
        FOR UPDATE`,
       [cartId, body.variantColorId, body.size]
     );
@@ -110,16 +100,15 @@ export const reserveCartItem = async (req: Request, res: Response) => {
       const totalPrice = unitPrice * nextQty;
       await client.query(
         `UPDATE cart_items
-         SET quantity = $3,
-             unit_price_snapshot = $4,
-             total_price_snapshot = $5,
-             product_snapshot = $6,
-             variant_snapshot = $7,
+         SET quantity = $2,
+             unit_price_snapshot = $3,
+             total_price_snapshot = $4,
+             product_snapshot = $5,
+             variant_snapshot = $6,
              updated_at = NOW()
-         WHERE id = $1`,
+         WHERE id = $1::uuid`,
         [
           existing[0].id,
-          cartId,
           nextQty,
           unitPrice,
           totalPrice,
@@ -134,7 +123,7 @@ export const reserveCartItem = async (req: Request, res: Response) => {
         `INSERT INTO cart_items
          (cart_id, product_id, variant_color_id, size, quantity,
           unit_price_snapshot, total_price_snapshot, product_snapshot, variant_snapshot)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+         VALUES ($1::uuid, $2::uuid, $3::uuid, $4::text, $5::int, $6::numeric, $7::numeric, $8::jsonb, $9::jsonb)
          RETURNING id`,
         [
           cartId,
@@ -152,17 +141,30 @@ export const reserveCartItem = async (req: Request, res: Response) => {
     }
 
     await client.query("COMMIT");
-    return res.status(201).json({
-      reservationId: reservation.id,
+    return res.status(200).json({
+      reservationId: cartItemId,
       cartId,
       cartItemId,
-      expiresAt: reservation.expires_at
+      expiresAt: new Date().toISOString()
     });
   } catch (error) {
-    await client.query("ROLLBACK");
-    throw error;
+    console.error("[CART][reserve] failed", error);
+    if (client) {
+      try {
+        await client.query("ROLLBACK");
+      } catch (rollbackError) {
+        console.error("[CART][reserve] rollback failed", rollbackError);
+      }
+    }
+
+    const code = (error as { code?: string }).code;
+    if (code === "22P02" || code === "23503" || code === "23505" || code === "23514") {
+      return res.status(400).json({ error: "Invalid request payload" });
+    }
+
+    return res.status(400).json({ error: "Invalid cart reserve request" });
   } finally {
-    client.release();
+    client?.release();
   }
 };
 

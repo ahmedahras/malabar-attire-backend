@@ -169,12 +169,13 @@ export const convertReservation = async (reservationId: string, userId: string, 
 export const convertReservationsForOrder = async (
   client: { query: (sql: string, params?: unknown[]) => Promise<{ rows: any[] }> },
   orderId: string,
-  userId: string
+  _userId: string
 ) => {
   const { rows: items } = await client.query(
-    `SELECT product_id, quantity
-     FROM order_items
-     WHERE order_id = $1`,
+    `SELECT pvc.product_id, oi.variant_color_id, oi.size, oi.quantity
+     FROM order_items oi
+     INNER JOIN product_variant_colors pvc ON pvc.id = oi.variant_color_id
+     WHERE oi.order_id = $1`,
     [orderId]
   );
 
@@ -182,77 +183,62 @@ export const convertReservationsForOrder = async (
     return { converted: 0 };
   }
 
-  const neededByProduct = new Map<string, number>();
+  const neededByVariant = new Map<
+    string,
+    { variantColorId: string; size: string; needed: number; productId: string }
+  >();
   for (const item of items) {
-    const current = neededByProduct.get(item.product_id) ?? 0;
-    neededByProduct.set(item.product_id, current + Number(item.quantity));
+    const variantColorId = String(item.variant_color_id);
+    const size = String(item.size);
+    const key = `${variantColorId}:${size}`;
+    const current = neededByVariant.get(key);
+    if (current) {
+      current.needed += Number(item.quantity);
+    } else {
+      neededByVariant.set(key, {
+        variantColorId,
+        size,
+        needed: Number(item.quantity),
+        productId: String(item.product_id)
+      });
+    }
   }
 
-  for (const [productId, needed] of neededByProduct.entries()) {
-    const { rows: productRows } = await client.query(
-      `SELECT quantity
-       FROM products
-       WHERE id = $1
+  const touchedProducts = new Set<string>();
+
+  for (const { variantColorId, size, needed, productId } of neededByVariant.values()) {
+    const { rows: stockRows } = await client.query(
+      `SELECT stock
+       FROM product_variant_sizes
+       WHERE variant_color_id = $1
+         AND size = $2
        FOR UPDATE`,
-      [productId]
+      [variantColorId, size]
     );
-    const product = productRows[0];
-    if (!product) {
-      throw new Error("Product not found");
-    }
-    if (Number(product.quantity) < needed) {
+
+    const currentStock = Number(stockRows[0]?.stock ?? 0);
+    if (currentStock < needed) {
       throw new Error("Out of stock");
     }
 
-    const { rows: reservations } = await client.query(
-      `SELECT id, quantity, expires_at
-       FROM product_reservations
-       WHERE product_id = $1
-         AND user_id = $2
-         AND status = 'ACTIVE'
-         AND expires_at > NOW()
-       ORDER BY created_at ASC
-       FOR UPDATE`,
-      [productId, userId]
+    await client.query(
+      `UPDATE product_variant_sizes
+       SET stock = stock - $3
+       WHERE variant_color_id = $1
+         AND size = $2`,
+      [variantColorId, size, needed]
     );
 
-    let remaining = needed;
-    for (const reservation of reservations) {
-      if (remaining <= 0) {
-        break;
-      }
-      const qty = Number(reservation.quantity);
-      if (qty > remaining) {
-        throw new Error("Reservation mismatch");
-      }
-      await client.query(
-        `UPDATE product_reservations
-         SET status = 'CONVERTED'
-         WHERE id = $1`,
-        [reservation.id]
-      );
-      remaining -= qty;
-    }
-
-    if (remaining > 0) {
-      throw new Error("Reservation expired");
-    }
-
-    const updateResult = await client.query(
-      `UPDATE products
-       SET quantity = quantity - $2,
-           status = CASE WHEN quantity - $2 <= 0 THEN 'OUT_OF_STOCK' ELSE status END,
-           updated_at = NOW()
-       WHERE id = $1
-       RETURNING quantity, shop_id`,
-      [productId, needed]
-    );
-
-    const updated = updateResult.rows[0];
-    if (updated && Number(updated.quantity) <= 3) {
+    touchedProducts.add(productId);
+    const remainingStock = currentStock - needed;
+    if (remainingStock <= 3) {
       const { rows: sellerRows } = await client.query(
-        `SELECT owner_user_id FROM shops WHERE id = $1`,
-        [updated.shop_id]
+        `SELECT s.owner_user_id
+         FROM product_variant_colors pvc
+         INNER JOIN products p ON p.id = pvc.product_id
+         INNER JOIN shops s ON s.id = p.shop_id
+         WHERE pvc.id = $1`,
+        [variantColorId]
       );
       const sellerId = sellerRows[0]?.owner_user_id as string | undefined;
       if (sellerId) {
@@ -261,7 +247,7 @@ export const convertReservationsForOrder = async (
           type: "low_stock",
           title: "Low stock alert",
           message: `Product ${productId} is low on stock.`,
-          metadata: { productId, quantity: updated.quantity },
+          metadata: { productId, quantity: remainingStock, size, variantColorId },
           client
         });
       }
@@ -269,5 +255,5 @@ export const convertReservationsForOrder = async (
   }
 
   await invalidatePattern("cache:products:*");
-  return { converted: neededByProduct.size };
+  return { converted: touchedProducts.size };
 };

@@ -273,7 +273,8 @@ export const createShipmentJob = async (orderId: string) => {
               s.shiprocket_pickup_name,
               s.shiprocket_pickup_address
        FROM order_items oi
-       INNER JOIN products p ON p.id = oi.product_id
+       INNER JOIN product_variant_colors pvc ON pvc.id = oi.variant_color_id
+       INNER JOIN products p ON p.id = pvc.product_id
        INNER JOIN shops s ON s.id = p.shop_id
        WHERE oi.order_id = $1`,
       [orderId]

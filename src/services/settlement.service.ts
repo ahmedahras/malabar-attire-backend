@@ -46,10 +46,11 @@ const computeSellerPayoutShares = async (orderId: string) => {
     seller_id: string;
     item_total: string | number;
   }>(
-    `SELECT s.owner_user_id AS seller_id,
+     `SELECT s.owner_user_id AS seller_id,
             COALESCE(SUM(oi.total_price), 0)::numeric AS item_total
      FROM order_items oi
-     INNER JOIN products p ON p.id = oi.product_id
+     INNER JOIN product_variant_colors pvc ON pvc.id = oi.variant_color_id
+     INNER JOIN products p ON p.id = pvc.product_id
      INNER JOIN shops s ON s.id = p.shop_id
      WHERE oi.order_id = $1
      GROUP BY s.owner_user_id`,

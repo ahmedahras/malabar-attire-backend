@@ -1,10 +1,12 @@
 import { env } from "../config/env";
+import { isRedisEnabled } from "../lib/redis";
 import { JOBS } from "./types";
 import { logger } from "../utils/logger";
 
 let warned = false;
 
-const jobsDisabled = () => process.env.JOBS_ENABLED === "false" || !env.JOBS_ENABLED;
+const jobsDisabled = () =>
+  process.env.JOBS_ENABLED === "false" || !env.JOBS_ENABLED || !isRedisEnabled;
 
 const getQueues = async () => {
   if (jobsDisabled()) {
