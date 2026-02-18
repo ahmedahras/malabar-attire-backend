@@ -41,12 +41,12 @@ const createProductSchema = z.object({
   district: z.string().min(2),
   price: z.number().positive(),
   sizeChart: z.record(z.string(), z.any()).optional(),
-  images: z.array(z.string().url()).default([]),
+  images: z.array(z.string().min(1)).default([]),
   colors: z
     .array(
       z.object({
         colorName: z.string().min(1),
-        colorImageUrl: z.string().url().optional(),
+        colorImageUrl: z.string().min(1).optional(),
         sizes: z
           .array(
             z.object({
@@ -93,12 +93,12 @@ const updateProductSchema = z.object({
   district: z.string().min(2).optional(),
   price: z.number().positive().optional(),
   sizeChart: z.record(z.string(), z.any()).optional(),
-  images: z.array(z.string().url()).optional(),
+  images: z.array(z.string().min(1)).optional(),
   colors: z
     .array(
       z.object({
         colorName: z.string().min(1),
-        colorImageUrl: z.string().url().optional(),
+        colorImageUrl: z.string().min(1).optional(),
         sizes: z
           .array(
             z.object({
@@ -119,11 +119,14 @@ const normalizeImageName = (value: string) => {
 };
 
 const withCdn = (value: string) => {
-  const name = normalizeImageName(value);
-  if (!env.CDN_BASE_URL) {
-    return name;
+  if (!value) return value;
+  // If CDN is configured, strip to filename and prefix with CDN base
+  if (env.CDN_BASE_URL) {
+    const name = normalizeImageName(value);
+    return `${env.CDN_BASE_URL.replace(/\/$/, "")}/products/${name}`;
   }
-  return `${env.CDN_BASE_URL.replace(/\/$/, "")}/products/${name}`;
+  // No CDN — return the value as stored (full S3 key or https URL, no query params)
+  return value.split("?")[0] ?? value;
 };
 
 const buildCacheKey = (base: string, query: Record<string, unknown>) => {
