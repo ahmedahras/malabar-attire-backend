@@ -10,7 +10,7 @@ paymentsRouter.post(
   "/intent",
   requireAuth,
   rateLimitProtected,
-  requireRole("customer"),
+  requireRole("customer", "shop_owner"),
   requireOrderAccess("orderId"),
   createPaymentIntent
 );

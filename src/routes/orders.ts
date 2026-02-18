@@ -17,8 +17,8 @@ import {
 
 export const ordersRouter = Router();
 
-ordersRouter.post("/", requireAuth, rateLimitOrdersRefunds, requireRole("customer"), createOrderFromCart);
-ordersRouter.get("/", requireAuth, rateLimitProtected, requireRole("customer"), listOrdersForCustomer);
+ordersRouter.post("/", requireAuth, rateLimitOrdersRefunds, requireRole("customer", "shop_owner"), createOrderFromCart);
+ordersRouter.get("/", requireAuth, rateLimitProtected, requireRole("customer", "shop_owner"), listOrdersForCustomer);
 ordersRouter.get(
   "/seller/orders",
   requireAuth,

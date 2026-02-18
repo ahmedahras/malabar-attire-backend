@@ -11,9 +11,9 @@ import {
 
 export const addressesRouter = Router();
 
-// All routes require a logged-in customer
-addressesRouter.get("/", requireAuth, rateLimitProtected, requireRole("customer"), listAddresses);
-addressesRouter.post("/", requireAuth, rateLimitProtected, requireRole("customer"), createAddress);
-addressesRouter.put("/:id", requireAuth, rateLimitProtected, requireRole("customer"), updateAddress);
-addressesRouter.delete("/:id", requireAuth, rateLimitProtected, requireRole("customer"), deleteAddress);
-addressesRouter.patch("/:id/default", requireAuth, rateLimitProtected, requireRole("customer"), setDefaultAddress);
+// Customer checkout flows are also available to shop owners.
+addressesRouter.get("/", requireAuth, rateLimitProtected, requireRole("customer", "shop_owner"), listAddresses);
+addressesRouter.post("/", requireAuth, rateLimitProtected, requireRole("customer", "shop_owner"), createAddress);
+addressesRouter.put("/:id", requireAuth, rateLimitProtected, requireRole("customer", "shop_owner"), updateAddress);
+addressesRouter.delete("/:id", requireAuth, rateLimitProtected, requireRole("customer", "shop_owner"), deleteAddress);
+addressesRouter.patch("/:id/default", requireAuth, rateLimitProtected, requireRole("customer", "shop_owner"), setDefaultAddress);

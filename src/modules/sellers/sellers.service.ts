@@ -2,9 +2,17 @@ import { db } from "../../db/pool";
 
 export const getShopByOwner = async (ownerUserId: string) => {
   const { rows } = await db.query(
-    `SELECT id, owner_user_id, name, district, status,
-            shiprocket_pickup_name, shiprocket_pickup_address, shiprocket_pickup_configured_at,
-            created_at
+    `SELECT id, owner_user_id, name, district, status, created_at
+     FROM shops
+     WHERE owner_user_id = $1`,
+    [ownerUserId]
+  );
+  return rows[0] ?? null;
+};
+
+export const getShopPickupAddress = async (ownerUserId: string) => {
+  const { rows } = await db.query(
+    `SELECT id, shiprocket_pickup_name, shiprocket_pickup_address, shiprocket_pickup_configured_at
      FROM shops
      WHERE owner_user_id = $1`,
     [ownerUserId]
