@@ -7,9 +7,6 @@ import { databaseEnvHint, resolveDatabaseUrlFromEnv } from "./config/databaseUrl
 
 dotenv.config({ override: false });
 
-// 🔎 DEBUG: confirm this file actually runs
-console.log("🚀 runMigrations starting...");
-
 // Backup strategy (ops):
 // - Run automated full backups daily.
 // - Perform a monthly restore test to validate recovery.
@@ -35,13 +32,9 @@ const runMigrations = async () => {
 
   const migrationsDir = path.resolve(__dirname, "..", "migrations");
 
-  console.log("📂 Looking for migrations in:", migrationsDir);
-
   const files = (await readdir(migrationsDir))
     .filter((file) => file.endsWith(".sql"))
     .sort((a, b) => a.localeCompare(b, "en", { numeric: true }));
-
-  console.log("📜 Found migration files:", files);
 
   const client = new Client({ connectionString: databaseUrl });
   await client.connect();
@@ -60,15 +53,10 @@ const runMigrations = async () => {
 
     const applied = new Set(appliedResult.rows.map((row) => row.filename));
 
-    console.log("✅ Already applied migrations:", [...applied]);
-
     for (const file of files) {
       if (applied.has(file)) {
-        console.log(`⏭ Skipping already applied migration: ${file}`);
         continue;
       }
-
-      console.log(`➡️ Running migration: ${file}`);
 
       const fullPath = path.join(migrationsDir, file);
       const sql = await readFile(fullPath, "utf8");
@@ -78,7 +66,6 @@ const runMigrations = async () => {
           "INSERT INTO schema_migrations (filename) VALUES ($1) ON CONFLICT (filename) DO NOTHING",
           [file]
         );
-        console.log(`⚠️ Empty migration file marked as applied: ${file}`);
         continue;
       }
 
@@ -93,16 +80,11 @@ const runMigrations = async () => {
         );
 
         await client.query("COMMIT");
-
-        console.log(`✅ Applied migration: ${file}`);
       } catch (error) {
         await client.query("ROLLBACK");
-        console.error(`❌ Migration failed: ${file}`);
         throw error;
       }
     }
-
-    console.log("🎉 All migrations complete.");
   } finally {
     await client.end();
   }
