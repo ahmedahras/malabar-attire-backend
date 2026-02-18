@@ -21,6 +21,7 @@ import { sellerProductsRouter } from "./sellerProducts";
 import { adminProductsRouter } from "./adminProducts";
 import { sellerApplicationsRouter } from "./sellerApplications";
 import { adminSellerApplicationsRouter } from "./adminSellerApplications";
+import { addressesRouter } from "./addresses";
 
 export const apiRouter = Router();
 
@@ -32,6 +33,7 @@ apiRouter.use("/health", healthRouter);
 apiRouter.use("/products", productsRouter);
 apiRouter.use("/orders", ordersRouter);
 apiRouter.use("/cart", cartRouter);
+apiRouter.use("/addresses", addressesRouter);
 
 // 💳 Payments
 apiRouter.use("/payments", paymentsRouter);

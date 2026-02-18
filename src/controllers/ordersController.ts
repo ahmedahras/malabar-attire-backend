@@ -222,15 +222,6 @@ export const createOrderFromCart = async (req: Request, res: Response) => {
     await emitOrderEvent(client, orderId, "order.created", "customer", req.user.sub);
 
     await client.query(
-      `UPDATE carts
-       SET status = 'abandoned', updated_at = NOW()
-       WHERE user_id = $1
-         AND status = 'converted'
-         AND id <> $2`,
-      [req.user.sub, body.cartId]
-    );
-
-    await client.query(
       `UPDATE carts SET status = 'converted', updated_at = NOW() WHERE id = $1`,
       [body.cartId]
     );

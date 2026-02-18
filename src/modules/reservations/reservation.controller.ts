@@ -63,7 +63,8 @@ export const reserveCartItem = async (req: Request, res: Response) => {
     const { rows: cartRows } = await client.query(
       `INSERT INTO carts (user_id, status)
        VALUES ($1::uuid, 'active')
-       ON CONFLICT (user_id, status)
+       ON CONFLICT (user_id)
+       WHERE status = 'active'
        DO UPDATE SET updated_at = NOW()
        RETURNING id`,
       [req.user.sub]
